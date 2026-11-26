@@ -26,7 +26,10 @@ jobs:
         run: .\mvnw.cmd -B clean verify
       - name: Verify standalone launcher from a path with spaces
         if: runner.os == 'Windows'
-        run: python scripts/test-windows-launcher.py
+        run: |
+          python scripts/test-windows-launcher.py start-shop.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/test-windows-launcher.py start-shop.cmd
       - name: Check required tests
         shell: bash
         run: |

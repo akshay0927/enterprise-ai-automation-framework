@@ -15,7 +15,14 @@ final class CatalogPage {
         wait = new WebDriverWait(driver, timeout);
     }
 
-    void open(String url) { driver.get(url); }
+    void open(String url) {
+        driver.get(url);
+        wait.withMessage("Shop initialization did not complete").until(browser -> {
+            String state = browser.findElement(By.tagName("html")).getDomAttribute("data-state");
+            if ("error".equals(state)) throw new IllegalStateException("Shop reported initialization failure");
+            return "ready".equals(state);
+        });
+    }
 
     void search(String query) {
         var input = wait.until(ExpectedConditions.elementToBeClickable(By.id("search")));

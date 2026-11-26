@@ -26,9 +26,10 @@ jobs:
         run: |
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
-          tests = ET.parse('target/surefire-reports/TEST-shop.SmokeTest.xml').findall('testcase')
+          from pathlib import Path
+          tests = [case for report in Path('target/surefire-reports').glob('TEST-*.xml') for case in ET.parse(report).findall('testcase')]
           passed = {t.get('name') for t in tests if all(t.find(k) is None for k in ('skipped','failure','error'))}
-          assert {'guestCartIsIsolated','shopperAddsNotebook'} <= passed, passed
+          assert {'guestCartIsIsolated','shopperAddsNotebook','configurationPrecedence','rejectsInvalidConfiguration'} <= passed, passed
           PY
       - uses: actions/upload-artifact@v4
         if: always()

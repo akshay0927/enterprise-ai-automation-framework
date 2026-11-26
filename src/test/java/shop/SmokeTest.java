@@ -2,10 +2,7 @@ package shop;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
-import java.time.Duration;
 import org.openqa.selenium.By;
-import org.openqa.selenium.chrome.ChromeDriver;
-import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.testng.annotations.Test;
@@ -25,10 +22,11 @@ public class SmokeTest {
     @Test(groups = {"smoke", "ui"})
     public void shopperAddsNotebook() throws Exception {
         try (Shop shop = new Shop()) {
-            var driver = new ChromeDriver(new ChromeOptions().addArguments("--headless=new"));
+            var config = BrowserConfig.load();
+            var driver = DriverFactory.open(config);
             try {
                 driver.get(shop.url());
-                var wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+                var wait = new WebDriverWait(driver, config.waitTimeout());
                 wait.until(ExpectedConditions.textToBe(By.id("product"), "Notebook"));
                 var search = driver.findElement(By.id("search"));
                 search.sendKeys("pencil");

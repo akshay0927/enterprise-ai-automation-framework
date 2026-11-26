@@ -68,13 +68,23 @@ public final class Shop implements AutoCloseable {
         this.beforeCheckout = beforeCheckout;
         this.clock = clock;
         catalog.forEach(p -> remaining.put(p.id(), p.stock()));
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server = bindBrowserFixture();
         server.setExecutor(workers);
         server.createContext("/", request -> {
             if (request.getRequestMethod().equals("POST") && request.getRequestURI().getPath().equals("/api/checkout")) beforeCheckout.run();
             handle(request);
         });
         server.start();
+    }
+
+    private static HttpServer bindBrowserFixture() throws IOException {
+        // Avoid browser-restricted ports that an OS ephemeral allocation may select.
+        for (int attempt = 0; attempt < 32; attempt++) {
+            int port = java.util.concurrent.ThreadLocalRandom.current().nextInt(20000, 30000);
+            try { return HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0); }
+            catch (java.net.BindException occupied) { if (attempt == 31) throw occupied; }
+        }
+        throw new IOException("Could not allocate fixture port");
     }
 
     public String url() { return "http://127.0.0.1:" + server.getAddress().getPort(); }

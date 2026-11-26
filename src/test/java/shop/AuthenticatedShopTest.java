@@ -22,6 +22,10 @@ public class AuthenticatedShopTest {
                 driver.findElement(By.cssSelector("#login button")).click();
                 wait.until(ExpectedConditions.textToBe(By.id("profile"),"alice"));
                 page.awaitQuantity(1);
+                var preview = java.nio.file.Path.of("target", "browser-preview", "shop.png");
+                java.nio.file.Files.createDirectories(preview.getParent());
+                java.nio.file.Files.write(preview, ((org.openqa.selenium.TakesScreenshot) driver)
+                    .getScreenshotAs(org.openqa.selenium.OutputType.BYTES));
                 driver.findElement(By.id("checkout")).click();
                 wait.until(ExpectedConditions.textToBePresentInElementLocated(By.id("message"),"Order confirmed:"));
                 page.awaitQuantity(0);

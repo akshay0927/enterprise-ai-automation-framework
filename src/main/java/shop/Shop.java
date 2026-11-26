@@ -91,8 +91,18 @@ public final class Shop implements AutoCloseable {
         var shop = new Shop();
         Runtime.getRuntime().addShutdownHook(new Thread(shop::close));
         System.out.println("Fixture shop: " + shop.url());
-        if (java.util.Arrays.asList(args).contains("--open") && java.awt.Desktop.isDesktopSupported())
-            java.awt.Desktop.getDesktop().browse(java.net.URI.create(shop.url()));
+        if (java.util.Arrays.asList(args).contains("--open")) {
+            try {
+                if (java.awt.Desktop.isDesktopSupported()
+                        && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
+                    java.awt.Desktop.getDesktop().browse(java.net.URI.create(shop.url()));
+                } else {
+                    System.err.println("Open the printed fixture URL in your browser.");
+                }
+            } catch (IOException | RuntimeException failure) {
+                System.err.println("Browser launch failed. The shop is running at " + shop.url());
+            }
+        }
         new java.util.concurrent.CountDownLatch(1).await();
     }
 

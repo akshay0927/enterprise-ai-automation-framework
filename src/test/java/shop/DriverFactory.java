@@ -29,6 +29,15 @@ final class DriverFactory {
             }
         };
         try {
+            if (driver instanceof ChromeDriver chrome) {
+                var capabilities = chrome.getCapabilities();
+                var metadata = (java.util.Map<?,?>) capabilities.getCapability("chrome");
+                String browserVersion = capabilities.getBrowserVersion();
+                String driverVersion = String.valueOf(metadata.get("chromedriverVersion")).split(" ")[0];
+                if (!browserVersion.split("\\.")[0].equals(driverVersion.split("\\.")[0]))
+                    throw new IllegalStateException("Incompatible Chrome " + browserVersion + " and driver " + driverVersion);
+                System.out.println("Chrome " + browserVersion + ", ChromeDriver " + driverVersion);
+            }
             driver.manage().timeouts().pageLoadTimeout(config.pageTimeout());
             return driver;
         } catch (RuntimeException failure) {

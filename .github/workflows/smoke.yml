@@ -24,6 +24,9 @@ jobs:
         run: sh mvnw -B clean verify
       - if: runner.os == 'Windows'
         run: .\mvnw.cmd -B clean verify
+      - name: Verify standalone launcher from a path with spaces
+        if: runner.os == 'Windows'
+        run: python scripts/test-windows-launcher.py
       - name: Check required tests
         shell: bash
         run: |

@@ -11,6 +11,8 @@ import java.util.UUID;
 
 public final class Shop implements AutoCloseable {
     private final HttpServer server;
+    private final java.util.concurrent.ExecutorService workers = java.util.concurrent.Executors.newFixedThreadPool(4);
+    private final Runnable beforeCheckout;
     private final Map<String,Map<String,Integer>> carts = new HashMap<>();
 
     private record Product(String id, String name, int cents, int stock) {
@@ -60,16 +62,23 @@ public final class Shop implements AutoCloseable {
 
     public Shop() throws IOException { this(java.time.Clock.systemUTC()); }
 
-    Shop(java.time.Clock clock) throws IOException {
+    Shop(java.time.Clock clock) throws IOException { this(clock, () -> {}); }
+
+    Shop(java.time.Clock clock, Runnable beforeCheckout) throws IOException {
+        this.beforeCheckout = beforeCheckout;
         this.clock = clock;
         catalog.forEach(p -> remaining.put(p.id(), p.stock()));
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/", this::handle);
+        server.setExecutor(workers);
+        server.createContext("/", request -> {
+            if (request.getRequestMethod().equals("POST") && request.getRequestURI().getPath().equals("/api/checkout")) beforeCheckout.run();
+            handle(request);
+        });
         server.start();
     }
 
     public String url() { return "http://127.0.0.1:" + server.getAddress().getPort(); }
-    public void close() { server.stop(0); }
+    public void close() { server.stop(0); workers.shutdownNow(); }
 
     private synchronized void handle(HttpExchange request) throws IOException {
         try (request) {
@@ -178,8 +187,46 @@ public final class Shop implements AutoCloseable {
                     <!doctype html><html lang="en"><title>Fixture shop</title><h1>Catalog</h1>
                     <label>Search <input id="search"></label><p id="product"></p>
                     <button id="add" disabled>Add notebook</button><output id="quantity"></output>
+                    <form id="login"><label>User <input id="user" required></label>
+                    <label>Password <input id="password" type="password" required></label><button>Sign in</button></form>
+                    <output id="profile">Guest</output><button id="logout" hidden>Sign out</button>
+                    <button id="checkout" hidden>Checkout</button><output id="message" aria-live="polite"></output>
                     <script type="module">
                     const el = id => document.getElementById(id);
+                    let token = null;
+                    function api(path, options = {}) {
+                      return fetch(path, {...options, headers: token ? {Authorization: 'Bearer ' + token} : {}});
+                    }
+                    function signedIn(user) {
+                      el('profile').textContent = user || 'Guest';
+                      el('login').hidden = !!user;
+                      el('checkout').hidden = el('logout').hidden = !user;
+                    }
+                    el('login').onsubmit = async event => {
+                      event.preventDefault();
+                      const response = await api('/api/login', {method:'POST', body:el('user').value + ':' + el('password').value});
+                      el('password').value = '';
+                      if (!response.ok) { el('message').textContent = 'Sign-in failed'; return; }
+                      token = (await response.json()).token;
+                      const profile = await (await api('/api/profile')).json();
+                      await cart(await api('/api/cart'));
+                      el('message').textContent = '';
+                      signedIn(profile.user);
+                    };
+                    el('checkout').onclick = async () => {
+                      const response = await api('/api/checkout',{method:'POST'});
+                      if (!response.ok) { el('message').textContent = 'Checkout unavailable'; return; }
+                      const order = await response.json();
+                      await cart(await api('/api/cart'));
+                      el('message').textContent = 'Order confirmed: ' + order.id;
+                    };
+                    el('logout').onclick = async () => {
+                      if (!(await api('/api/logout',{method:'POST'})).ok) return;
+                      token = null;
+                      await cart(await api('/api/cart'));
+                      el('message').textContent = '';
+                      signedIn(null);
+                    };
                     const products = await (await fetch('/api/products')).json();
                     async function cart(response) { el('quantity').textContent = (await response.json()).quantity; }
                     await cart(await fetch('/api/cart'));
@@ -191,7 +238,7 @@ public final class Shop implements AutoCloseable {
                       el('add').textContent = match ? 'Add ' + match.name : 'Add product';
                     }
                     el('search').oninput = filter;
-                    el('add').onclick = async () => cart(await fetch('/api/cart/items/' + el('add').dataset.product,{method:'POST'}));
+                    el('add').onclick = async () => cart(await api('/api/cart/items/' + el('add').dataset.product,{method:'POST'}));
                     filter();
                     </script></html>
                     """;

@@ -87,6 +87,15 @@ public final class Shop implements AutoCloseable {
         throw new IOException("Could not allocate fixture port");
     }
 
+    public static void main(String[] args) throws Exception {
+        var shop = new Shop();
+        Runtime.getRuntime().addShutdownHook(new Thread(shop::close));
+        System.out.println("Fixture shop: " + shop.url());
+        if (java.util.Arrays.asList(args).contains("--open") && java.awt.Desktop.isDesktopSupported())
+            java.awt.Desktop.getDesktop().browse(java.net.URI.create(shop.url()));
+        new java.util.concurrent.CountDownLatch(1).await();
+    }
+
     public String url() { return "http://127.0.0.1:" + server.getAddress().getPort(); }
     public void close() { server.stop(0); workers.shutdownNow(); }
 
@@ -194,7 +203,7 @@ public final class Shop implements AutoCloseable {
             } else if (path.equals("/")) {
                 type = "text/html";
                 body = """
-                    <!doctype html><html lang="en"><title>Fixture shop</title><h1>Catalog</h1>
+                    <!doctype html><html lang="en" data-state="loading"><title>Fixture shop</title><h1>Catalog</h1>
                     <label>Search <input id="search"></label><p id="product"></p>
                     <button id="add" disabled>Add notebook</button><output id="quantity"></output>
                     <form id="login"><label>User <input id="user" required></label>
@@ -237,9 +246,14 @@ public final class Shop implements AutoCloseable {
                       el('message').textContent = '';
                       signedIn(null);
                     };
-                    const products = await (await fetch('/api/products')).json();
+                    try {
+                    const catalogResponse = await fetch('/api/products');
+                    if (!catalogResponse.ok) throw new Error('Catalog unavailable');
+                    const products = await catalogResponse.json();
                     async function cart(response) { el('quantity').textContent = (await response.json()).quantity; }
-                    await cart(await fetch('/api/cart'));
+                    const initialCart = await fetch('/api/cart');
+                    if (!initialCart.ok) throw new Error('Cart unavailable');
+                    await cart(initialCart);
                     function filter() {
                       const match = products.find(p => p.name.toLowerCase().includes(el('search').value.trim().toLowerCase()));
                       el('product').textContent = match?.name ?? 'No matching products';
@@ -250,6 +264,11 @@ public final class Shop implements AutoCloseable {
                     el('search').oninput = filter;
                     el('add').onclick = async () => cart(await api('/api/cart/items/' + el('add').dataset.product,{method:'POST'}));
                     filter();
+                    document.documentElement.dataset.state = 'ready';
+                    } catch (failure) {
+                      document.documentElement.dataset.state = 'error';
+                      el('message').textContent = 'Shop initialization failed';
+                    }
                     </script></html>
                     """;
             } else {

@@ -36,7 +36,33 @@ public final class Shop implements AutoCloseable {
         return "{\"quantity\":" + units + ",\"items\":" + lines + ",\"totalCents\":" + total + "}";
     }
 
-    public Shop() throws IOException {
+    private record Session(String user, java.time.Instant expires) {}
+    private final java.time.Clock clock;
+    private final Map<String,Session> sessions = new HashMap<>();
+    private final Map<String,String> passwords = Map.of("alice", UUID.randomUUID().toString(), "bob", UUID.randomUUID().toString());
+    private final Map<String,Map<String,Integer>> accounts = new HashMap<>();
+    private final Map<String,Integer> remaining = new HashMap<>();
+    private final Map<String,java.util.List<String>> orders = new HashMap<>();
+
+    // Test fixture provisioning only; never exposed through HTTP.
+    String fixturePassword(String user) { return passwords.get(user); }
+
+    private static String guestId(HttpExchange request) {
+        for (String header : request.getRequestHeaders().getOrDefault("Cookie", java.util.List.of()))
+            for (String field : header.split(";"))
+                if (field.strip().startsWith("guest=")) return field.strip().substring(6);
+        return "";
+    }
+
+    private String productJson(Product p) {
+        return new Product(p.id(), p.name(), p.cents(), remaining.get(p.id())).json();
+    }
+
+    public Shop() throws IOException { this(java.time.Clock.systemUTC()); }
+
+    Shop(java.time.Clock clock) throws IOException {
+        this.clock = clock;
+        catalog.forEach(p -> remaining.put(p.id(), p.stock()));
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", this::handle);
         server.start();
@@ -49,27 +75,77 @@ public final class Shop implements AutoCloseable {
         try (request) {
             String path = request.getRequestURI().getPath();
             boolean add = path.startsWith("/api/cart/items/");
-            String method = add ? "POST" : "GET";
+            boolean login = path.equals("/api/login"), logout = path.equals("/api/logout"), checkout = path.equals("/api/checkout");
+            String method = add || login || logout || checkout ? "POST" : "GET";
             int status = 200;
             String type = "application/json";
             String body;
+            sessions.values().removeIf(session -> !session.expires().isAfter(clock.instant()));
+            String auth = request.getRequestHeaders().getFirst("Authorization");
+            String token = auth != null && auth.startsWith("Bearer ") ? auth.substring(7) : "";
+            Session session = sessions.get(token);
             if (!(add && java.util.Set.of("DELETE","PUT").contains(request.getRequestMethod())) && !method.equals(request.getRequestMethod())) {
                 status = 405;
                 request.getResponseHeaders().set("Allow", add ? "POST, PUT, DELETE" : method);
                 body = "{}";
-            } else if (add || path.equals("/api/cart")) {
-                String id = "";
-                for (String header : request.getRequestHeaders().getOrDefault("Cookie", java.util.List.of())) {
-                    for (String field : header.split(";")) {
-                        if (field.strip().startsWith("guest=")) id = field.strip().substring(6);
+            } else if (login) {
+                String credentials = new String(request.getRequestBody().readNBytes(257), StandardCharsets.UTF_8);
+                String[] parts = credentials.split(":", 2);
+                if (parts.length != 2 || credentials.length() > 256 || !parts[1].equals(passwords.get(parts[0]))) {
+                    status = 401;
+                    body = "{}";
+                } else {
+                    String user = parts[0];
+                    var account = accounts.computeIfAbsent(user, key -> new HashMap<>());
+                    var guest = carts.get(guestId(request));
+                    if (guest != null && guest.entrySet().stream().anyMatch(e ->
+                            account.getOrDefault(e.getKey(), 0) + e.getValue() > remaining.get(e.getKey()))) {
+                        status = 409;
+                        body = "{}";
+                    } else {
+                        if (guest != null) {
+                            guest.forEach((key, value) -> account.merge(key, value, Integer::sum));
+                            carts.remove(guestId(request));
+                        }
+                        String issued = UUID.randomUUID().toString();
+                        sessions.put(issued, new Session(user, clock.instant().plusSeconds(900)));
+                        body = "{\"token\":\"" + issued + "\"}";
                     }
                 }
-                if (!carts.containsKey(id)) {
-                    id = UUID.randomUUID().toString();
-                    carts.put(id, new HashMap<>());
-                    request.getResponseHeaders().set("Set-Cookie", "guest=" + id + "; Path=/; HttpOnly; SameSite=Strict");
+            } else if (session == null && (auth != null || logout || checkout || path.equals("/api/profile") || path.equals("/api/orders"))) {
+                status = 401;
+                body = "{}";
+            } else if (logout) {
+                sessions.remove(token);
+                body = "{}";
+            } else if (path.equals("/api/profile")) {
+                body = "{\"user\":\"" + session.user() + "\"}";
+            } else if (path.equals("/api/orders")) {
+                body = "[" + String.join(",", orders.getOrDefault(session.user(), java.util.List.of())) + "]";
+            } else if (checkout) {
+                var cart = accounts.get(session.user());
+                if (cart.isEmpty() || cart.entrySet().stream().anyMatch(e -> e.getValue() > remaining.get(e.getKey()))) {
+                    status = 409;
+                    body = "{}";
+                } else {
+                    body = "{\"id\":\"" + UUID.randomUUID() + "\",\"cart\":" + cartJson(cart) + "}";
+                    cart.forEach((key, value) -> remaining.compute(key, (k, available) -> available - value));
+                    orders.computeIfAbsent(session.user(), key -> new java.util.ArrayList<>()).add(body);
+                    cart.clear();
+                    status = 201;
                 }
-                var cart = carts.get(id);
+            } else if (add || path.equals("/api/cart")) {
+                Map<String,Integer> cart;
+                if (session != null) cart = accounts.get(session.user());
+                else {
+                    String id = guestId(request);
+                    if (!carts.containsKey(id)) {
+                        id = UUID.randomUUID().toString();
+                        carts.put(id, new HashMap<>());
+                        request.getResponseHeaders().set("Set-Cookie", "guest=" + id + "; Path=/; HttpOnly; SameSite=Strict");
+                    }
+                    cart = carts.get(id);
+                }
                 if (add) {
                     String item = path.substring("/api/cart/items/".length());
                     var product = catalog.stream().filter(p -> p.id().equals(item)).findFirst();
@@ -83,7 +159,7 @@ public final class Shop implements AutoCloseable {
                             if (!number.matches("[1-9][0-9]{0,6}")) status = 400;
                             else qty = Integer.parseInt(number);
                         }
-                        if (status == 200 && qty > product.get().stock()) status = 409;
+                        if (status == 200 && qty > remaining.get(item)) status = 409;
                         if (status == 200) cart.put(item, qty);
                     }
                 }
@@ -91,11 +167,11 @@ public final class Shop implements AutoCloseable {
             } else if (path.equals("/health")) {
                 body = "{\"status\":\"up\"}";
             } else if (path.equals("/api/products")) {
-                body = catalog.stream().map(Product::json).collect(java.util.stream.Collectors.joining(",", "[", "]"));
+                body = catalog.stream().map(this::productJson).collect(java.util.stream.Collectors.joining(",", "[", "]"));
             } else if (path.startsWith("/api/products/")) {
                 var found = catalog.stream().filter(p -> path.equals("/api/products/" + p.id())).findFirst();
                 status = found.isPresent() ? 200 : 404;
-                body = found.map(Product::json).orElse("{}");
+                body = found.map(this::productJson).orElse("{}");
             } else if (path.equals("/")) {
                 type = "text/html";
                 body = """

@@ -212,6 +212,7 @@ public final class Shop implements AutoCloseable {
                     <button id="checkout" hidden>Checkout</button><output id="message" aria-live="polite"></output>
                     <script type="module">
                     const el = id => document.getElementById(id);
+                    async function cart(response) { el('quantity').textContent = (await response.json()).quantity; }
                     let token = null;
                     function api(path, options = {}) {
                       return fetch(path, {...options, headers: token ? {Authorization: 'Bearer ' + token} : {}});
@@ -250,7 +251,6 @@ public final class Shop implements AutoCloseable {
                     const catalogResponse = await fetch('/api/products');
                     if (!catalogResponse.ok) throw new Error('Catalog unavailable');
                     const products = await catalogResponse.json();
-                    async function cart(response) { el('quantity').textContent = (await response.json()).quantity; }
                     const initialCart = await fetch('/api/cart');
                     if (!initialCart.ok) throw new Error('Cart unavailable');
                     await cart(initialCart);

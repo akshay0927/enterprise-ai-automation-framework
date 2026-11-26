@@ -2,20 +2,20 @@ package shop;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
-import org.openqa.selenium.By;
-import org.openqa.selenium.support.ui.ExpectedConditions;
-import org.openqa.selenium.support.ui.WebDriverWait;
 import org.testng.annotations.Test;
+
+import static org.testng.Assert.assertEquals;
 
 public class SmokeTest {
     @Test(groups = {"smoke", "api"})
     public void guestCartIsIsolated() throws Exception {
         try (Shop shop = new Shop()) {
-            String guest = given().baseUri(shop.url()).get("/api/cart").then()
+            var api = ApiConfig.forFixture(shop.url());
+            String guest = given().spec(api.request()).get("/api/cart").then()
                 .statusCode(200).body("quantity", equalTo(0)).extract().cookie("guest");
-            given().baseUri(shop.url()).cookie("guest", guest).post("/api/cart/items/notebook")
+            given().spec(api.request()).cookie("guest", guest).post("/api/cart/items/notebook")
                 .then().statusCode(200).body("totalCents", equalTo(500));
-            given().baseUri(shop.url()).get("/api/cart").then().statusCode(200).body("quantity", equalTo(0));
+            given().spec(api.request()).get("/api/cart").then().statusCode(200).body("quantity", equalTo(0));
         }
     }
 
@@ -25,16 +25,15 @@ public class SmokeTest {
             var config = BrowserConfig.load();
             var driver = DriverFactory.open(config);
             try {
-                driver.get(shop.url());
-                var wait = new WebDriverWait(driver, config.waitTimeout());
-                wait.until(ExpectedConditions.textToBe(By.id("product"), "Notebook"));
-                var search = driver.findElement(By.id("search"));
-                search.sendKeys("pencil");
-                wait.until(ExpectedConditions.textToBe(By.id("product"), "No matching products"));
-                search.clear();
-                search.sendKeys("BOOK");
-                wait.until(ExpectedConditions.elementToBeClickable(By.id("add"))).click();
-                wait.until(ExpectedConditions.textToBe(By.id("quantity"), "1"));
+                var page = new CatalogPage(driver, config.waitTimeout());
+                page.open(shop.url());
+                assertEquals(page.awaitProduct("Notebook"), "Notebook");
+                page.search("pencil");
+                assertEquals(page.awaitProduct("No matching products"), "No matching products");
+                page.search("BOOK");
+                assertEquals(page.awaitProduct("Notebook"), "Notebook");
+                page.addProduct();
+                assertEquals(page.awaitQuantity(1), 1);
             } finally { driver.quit(); }
         }
     }

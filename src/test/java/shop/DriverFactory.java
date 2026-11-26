@@ -10,6 +10,10 @@ final class DriverFactory {
         WebDriver driver = switch (config.browser()) {
             case CHROME -> {
                 var options = new ChromeOptions();
+                String binary = System.getenv("SHOP_CHROME_BINARY");
+                if (binary != null) options.setBinary(binary);
+                String executable = System.getenv("SHOP_CHROMEDRIVER");
+                if (executable != null) System.setProperty("webdriver.chrome.driver", executable);
                 if (config.headless()) options.addArguments("--headless=new");
                 yield new ChromeDriver(options);
             }

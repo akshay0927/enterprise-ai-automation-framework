@@ -17,6 +17,8 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      - name: Install matched Chrome and ChromeDriver
+        run: python scripts/setup-chrome.py
       - if: runner.os == 'Linux'
         run: sh mvnw -B clean verify
       - if: runner.os == 'Windows'

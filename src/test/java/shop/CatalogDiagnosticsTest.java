@@ -31,7 +31,7 @@ public class CatalogDiagnosticsTest {
                 assertEquals(failure.getMessage(), "Shop reported initialization failure");
                 assertEquals(failure.getSuppressed().length, 1);
                 assertEquals(failure.getSuppressed()[0].getMessage(),
-                    "documentRequested=true\ndocumentSent=true\nproductsSent=true\ncartSent=false\npageState=error\n");
+                    "documentRequested=true\ndocumentSent=true\nproductsSent=true\ncartSent=false\npageState=error\nlocation=fixture\n");
             } finally {
                 driver.quit();
             }

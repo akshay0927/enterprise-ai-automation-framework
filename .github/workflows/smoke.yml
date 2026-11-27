@@ -40,7 +40,7 @@ jobs:
           passed = {t.get('name') for t in tests if all(t.find(k) is None for k in ('skipped','failure','error'))}
           assert {'guestCartIsIsolated','shopperAddsNotebook','browserCheckoutAndLogout','expiredCheckoutReturnsToGuest','cartStartupFailureIsDiagnosed','concurrentCheckouts','isolatedOrdersAndStock','inventoryLimitsPreserveCart','configurationPrecedence','rejectsInvalidConfiguration'} <= passed, passed
           reports = Path('target/surefire-reports/browser-diagnostics').glob('catalog-open-*.txt')
-          expected = "documentRequested=true\ndocumentSent=true\nproductsSent=true\ncartSent=false\npageState=error\n"
+          expected = "documentRequested=true\ndocumentSent=true\nproductsSent=true\ncartSent=false\npageState=error\nlocation=fixture\n"
           assert any(report.read_text(encoding='utf-8') == expected for report in reports), 'Missing cart failure diagnostic'
           PY
       - uses: actions/upload-artifact@v4

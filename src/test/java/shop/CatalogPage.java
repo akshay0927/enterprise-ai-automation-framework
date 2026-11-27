@@ -30,7 +30,16 @@ final class CatalogPage {
                 return "ready".equals(observedState);
             });
         } catch (RuntimeException failure) {
-            String progress = shop.catalogProgress() + "\npageState=" + observedState + "\n";
+            String location = "unavailable";
+            try {
+                String current = driver.getCurrentUrl();
+                if ((shop.url() + "/").equals(current)) location = "fixture";
+                else if ("about:blank".equals(current) || "data:,".equals(current)) location = "blank";
+                else location = "other";
+            } catch (RuntimeException ignored) {
+                // Keep the fixture evidence even if WebDriver has disconnected.
+            }
+            String progress = shop.catalogProgress() + "\npageState=" + observedState + "\nlocation=" + location + "\n";
             try {
                 var directory = java.nio.file.Path.of("target", "surefire-reports", "browser-diagnostics");
                 java.nio.file.Files.createDirectories(directory);

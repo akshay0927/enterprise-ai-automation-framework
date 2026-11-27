@@ -121,14 +121,22 @@ jobs:
           python scripts/execution_history.py
           python scripts/quality_dashboard.py
       - uses: actions/upload-artifact@v4
+        id: bundle
         with:
-          name: execution-comparison
+          name: execution-comparison-attempt-${{ github.run_attempt }}
           path: target/comparison/
           if-no-files-found: error
-      - uses: actions/download-artifact@v4
-        with:
-          name: execution-comparison
-          path: target/published-quality
+      - name: Read back the exact uploaded bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE_ID: ${{ steps.bundle.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          for delay in 0 2 5; do
+            sleep "$delay"
+            if gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$BUNDLE_ID/zip" > target/published.zip; then break; fi
+          done
+          python scripts/read_quality_bundle.py
       - uses: actions/download-artifact@v4
         with:
           pattern: smoke-reports-*

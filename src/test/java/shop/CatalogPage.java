@@ -20,6 +20,12 @@ final class CatalogPage {
         observedState = "unobserved";
         try {
             driver.get(shop.url());
+            // On Windows ChromeDriver can return from get() on its startup blank
+            // document without sending a request. Only repeat this read in that case.
+            if (isBlankDocument(driver.getCurrentUrl()) && !shop.documentRequested()) {
+                System.out.println("Catalog navigation returned a blank document before reaching the fixture; retrying once.");
+                driver.get(shop.url());
+            }
             wait.withMessage("Shop initialization did not complete").until(browser -> {
                 String state = browser.findElement(By.tagName("html")).getDomAttribute("data-state");
                 observedState = switch (state == null ? "" : state) {
@@ -34,7 +40,7 @@ final class CatalogPage {
             try {
                 String current = driver.getCurrentUrl();
                 if ((shop.url() + "/").equals(current)) location = "fixture";
-                else if ("about:blank".equals(current) || "data:,".equals(current)) location = "blank";
+                else if (isBlankDocument(current)) location = "blank";
                 else location = "other";
             } catch (RuntimeException ignored) {
                 // Keep the fixture evidence even if WebDriver has disconnected.
@@ -51,6 +57,10 @@ final class CatalogPage {
             failure.addSuppressed(new IllegalStateException(progress));
             throw failure;
         }
+    }
+
+    private static boolean isBlankDocument(String url) {
+        return "about:blank".equals(url) || "data:,".equals(url);
     }
 
     void search(String query) {

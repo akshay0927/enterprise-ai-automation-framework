@@ -19,6 +19,8 @@ public final class Shop implements AutoCloseable {
     private volatile boolean productsSent;
     private volatile boolean cartSent;
 
+    boolean documentRequested() { return documentRequested; }
+
     String catalogProgress() {
         return "documentRequested=" + documentRequested + "\ndocumentSent=" + documentSent
             + "\nproductsSent=" + productsSent + "\ncartSent=" + cartSent;

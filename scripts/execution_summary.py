@@ -140,7 +140,23 @@ def summarize(directory):
                 nav[result] += 1
             else:
                 require(name in methods, "unknown_method")
-                rows.append(row(cls, name, result, duration))
+                item = row(cls, name, result, duration)
+                if states and result in ("failed", "error"):
+                    detail = case.find(states[0])
+                    if detail.get("type") in ("java.lang.AssertionError", "org.opentest4j.AssertionFailedError"):
+                        item["category"] = "assertion_failure"
+                    prefix = "Suppressed: java.lang.IllegalStateException: documentRequested="
+                    for line_no, line in enumerate((detail.text or "").splitlines()):
+                        if line.strip().startswith(prefix):
+                            lines = (detail.text or "").splitlines()[line_no:line_no + 6]
+                            lines[0] = "documentRequested=" + line.strip()[len(prefix):]
+                            try:
+                                observation = diagnostic("\n".join(v.strip() for v in lines))
+                            except EvidenceError:
+                                continue
+                            item["observations"].append(observation)
+                            break
+                rows.append(item)
         if nav:
             rows.extend(navigation(directory, nav))
         require(len(set(r["id"] for r in rows)) == len(rows), "duplicate_identity")
@@ -178,6 +194,7 @@ def main():
     summary.update(repository=os.environ["GITHUB_REPOSITORY"], testedCommit=sha,
                    workflowRun=os.environ["GITHUB_RUN_ID"], attempt=os.environ["GITHUB_RUN_ATTEMPT"],
                    job=os.environ["GITHUB_JOB"], platform=os.environ["RUNNER_OS"],
+                   configuration={"browser": "chrome", "headless": True, "suite": "framework-smoke"},
                    generatedUtc=dt.datetime.now(dt.timezone.utc).isoformat())
     path = Path("target/execution-summary.json")
     path.parent.mkdir(exist_ok=True)

@@ -9,6 +9,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      SHOP_BROWSER: chrome
+      SHOP_HEADLESS: "true"
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +52,11 @@ jobs:
           PY
       - name: Verify reporting regressions
         if: always()
-        run: python scripts/test_execution_summary.py
+        run: |
+          python scripts/test_execution_summary.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/test_comparison.py
+        shell: pwsh
       - name: Generate execution summary
         if: always()
         run: python scripts/execution_summary.py
@@ -70,4 +77,23 @@ jobs:
         with:
           name: shop-browser-preview
           path: target/browser-preview/shop.png
+          if-no-files-found: error
+
+  compare:
+    if: ${{ always() && !cancelled() }}
+    needs: smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: execution-summary-*
+          path: target/platforms
+      - name: Inspect platform artifacts and compare the tested checkout
+        run: python scripts/compare_execution.py target/platforms "$(git rev-parse HEAD)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: execution-comparison
+          path: target/comparison/
           if-no-files-found: error

@@ -214,56 +214,93 @@ public final class Shop implements AutoCloseable {
                 type = "text/html";
                 body = """
                     <!doctype html><html lang="en" data-state="loading"><title>Fixture shop</title><h1>Catalog</h1>
+                    <fieldset id="controls" disabled><legend>Shopping</legend>
                     <label>Search <input id="search"></label><p id="product"></p>
                     <button id="add" disabled>Add notebook</button><output id="quantity"></output>
                     <form id="login"><label>User <input id="user" required></label>
                     <label>Password <input id="password" type="password" required></label><button>Sign in</button></form>
                     <output id="profile">Guest</output><button id="logout" hidden>Sign out</button>
-                    <button id="checkout" hidden>Checkout</button><output id="message" aria-live="polite"></output>
+                    <button id="checkout" hidden>Checkout</button></fieldset><output id="message" aria-live="polite"></output>
                     <script type="module">
                     const el = id => document.getElementById(id);
-                    async function cart(response) { el('quantity').textContent = (await response.json()).quantity; }
                     let token = null;
-                    function api(path, options = {}) {
-                      return fetch(path, {...options, headers: token ? {Authorization: 'Bearer ' + token} : {}});
+                    async function api(path, options = {}, bearer = token) {
+                      const response = await fetch(path, {
+                        ...options,
+                        signal: AbortSignal.timeout(10000),
+                        headers: bearer ? {Authorization: 'Bearer ' + bearer} : {}
+                      });
+                      if (!response.ok) throw response;
+                      return response.json();
+                    }
+                    async function refreshCart() {
+                      el('quantity').textContent = (await api('/api/cart')).quantity;
                     }
                     function signedIn(user) {
                       el('profile').textContent = user || 'Guest';
                       el('login').hidden = !!user;
                       el('checkout').hidden = el('logout').hidden = !user;
                     }
-                    el('login').onsubmit = async event => {
-                      event.preventDefault();
-                      const response = await api('/api/login', {method:'POST', body:el('user').value + ':' + el('password').value});
-                      el('password').value = '';
-                      if (!response.ok) { el('message').textContent = 'Sign-in failed'; return; }
-                      token = (await response.json()).token;
-                      const profile = await (await api('/api/profile')).json();
-                      await cart(await api('/api/cart'));
-                      el('message').textContent = '';
-                      signedIn(profile.user);
-                    };
-                    el('checkout').onclick = async () => {
-                      const response = await api('/api/checkout',{method:'POST'});
-                      if (!response.ok) { el('message').textContent = 'Checkout unavailable'; return; }
-                      const order = await response.json();
-                      await cart(await api('/api/cart'));
-                      el('message').textContent = 'Order confirmed: ' + order.id;
-                    };
-                    el('logout').onclick = async () => {
-                      if (!(await api('/api/logout',{method:'POST'})).ok) return;
+                    function clearSession() {
                       token = null;
-                      await cart(await api('/api/cart'));
-                      el('message').textContent = '';
                       signedIn(null);
+                      el('user').value = el('password').value = '';
+                      el('quantity').textContent = el('message').textContent = '';
+                    }
+                    async function act(operation, failureMessage) {
+                      const controls = el('controls');
+                      if (controls.disabled) return;
+                      controls.disabled = true;
+                      try {
+                        await operation();
+                      } catch (failure) {
+                        if (token && failure instanceof Response && failure.status === 401) {
+                          clearSession();
+                          el('message').textContent = 'Session expired. Sign in again.';
+                          try {
+                            await refreshCart();
+                          } catch {
+                            el('message').textContent += ' Guest cart unavailable.';
+                          }
+                        } else {
+                          el('message').textContent = failureMessage;
+                        }
+                      } finally {
+                        controls.disabled = false;
+                      }
+                    }
+                    el('login').onsubmit = event => {
+                      event.preventDefault();
+                      return act(async () => {
+                        const credentials = el('user').value + ':' + el('password').value;
+                        el('password').value = '';
+                        const session = await api('/api/login', {method:'POST', body:credentials});
+                        el('quantity').textContent = '';
+                        const profile = await api('/api/profile', {}, session.token);
+                        const cart = await api('/api/cart', {}, session.token);
+                        token = session.token;
+                        el('quantity').textContent = cart.quantity;
+                        signedIn(profile.user);
+                        el('message').textContent = '';
+                      }, 'Sign-in failed');
                     };
+                    el('checkout').onclick = () => act(async () => {
+                      const order = await api('/api/checkout', {method:'POST'});
+                      el('quantity').textContent = 0;
+                      el('message').textContent = 'Order confirmed: ' + order.id;
+                    }, 'Checkout unavailable');
+                    el('logout').onclick = () => act(async () => {
+                      await api('/api/logout', {method:'POST'});
+                      clearSession();
+                      try {
+                        await refreshCart();
+                      } catch {
+                        el('message').textContent = 'Signed out. Guest cart unavailable.';
+                      }
+                    }, 'Could not complete sign-out');
                     try {
-                    const catalogResponse = await fetch('/api/products');
-                    if (!catalogResponse.ok) throw new Error('Catalog unavailable');
-                    const products = await catalogResponse.json();
-                    const initialCart = await fetch('/api/cart');
-                    if (!initialCart.ok) throw new Error('Cart unavailable');
-                    await cart(initialCart);
+                    const products = await api('/api/products');
+                    await refreshCart();
                     function filter() {
                       const match = products.find(p => p.name.toLowerCase().includes(el('search').value.trim().toLowerCase()));
                       el('product').textContent = match?.name ?? 'No matching products';
@@ -272,8 +309,13 @@ public final class Shop implements AutoCloseable {
                       el('add').textContent = match ? 'Add ' + match.name : 'Add product';
                     }
                     el('search').oninput = filter;
-                    el('add').onclick = async () => cart(await api('/api/cart/items/' + el('add').dataset.product,{method:'POST'}));
+                    el('add').onclick = () => act(async () => {
+                      const cart = await api('/api/cart/items/' + el('add').dataset.product, {method:'POST'});
+                      el('quantity').textContent = cart.quantity;
+                      el('message').textContent = '';
+                    }, 'Cart update rejected');
                     filter();
+                    el('controls').disabled = false;
                     document.documentElement.dataset.state = 'ready';
                     } catch (failure) {
                       document.documentElement.dataset.state = 'error';

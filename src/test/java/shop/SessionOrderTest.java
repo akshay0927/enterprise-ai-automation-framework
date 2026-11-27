@@ -2,17 +2,10 @@ package shop;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
-import java.time.*;
+import java.time.Duration;
 import org.testng.annotations.Test;
 
 public class SessionOrderTest {
-    private static class FixtureClock extends Clock {
-        Instant now = Instant.EPOCH;
-        public Instant instant() { return now; }
-        public ZoneId getZone() { return ZoneOffset.UTC; }
-        public Clock withZone(ZoneId zone) { return Clock.fixed(now, zone); }
-    }
-
     @Test(groups={"authentication","api","regression"})
     public void isolatedOrdersAndStock() throws Exception {
         var time = new FixtureClock();
@@ -42,7 +35,7 @@ public class SessionOrderTest {
             given().spec(alice).get("/api/orders").then().body("size()",equalTo(1));
             given().spec(alice).post("/api/logout").then().statusCode(200);
             given().spec(alice).get("/api/profile").then().statusCode(401);
-            time.now = time.now.plusSeconds(900);
+            time.advance(Duration.ofMinutes(15));
             given().spec(bob).get("/api/profile").then().statusCode(401);
         }
     }

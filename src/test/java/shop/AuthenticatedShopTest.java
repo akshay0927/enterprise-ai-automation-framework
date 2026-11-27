@@ -18,7 +18,7 @@ public class AuthenticatedShopTest {
             try {
                 var page = new CatalogPage(driver, config.waitTimeout());
                 var wait = new WebDriverWait(driver, config.waitTimeout());
-                page.open(shop.url());
+                page.open(shop);
                 page.addProduct();
                 page.awaitQuantity(1);
                 signIn(driver, wait, shop);
@@ -46,7 +46,7 @@ public class AuthenticatedShopTest {
             try {
                 var page = new CatalogPage(driver, config.waitTimeout());
                 var wait = new WebDriverWait(driver, config.waitTimeout());
-                page.open(shop.url());
+                page.open(shop);
                 signIn(driver, wait, shop);
                 page.addProduct();
                 page.awaitQuantity(1);

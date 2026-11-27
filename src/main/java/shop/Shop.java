@@ -1,5 +1,6 @@
 package shop;
 
+import com.sun.net.httpserver.Filter;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -13,6 +14,15 @@ public final class Shop implements AutoCloseable {
     private final HttpServer server;
     private final java.util.concurrent.ExecutorService workers = java.util.concurrent.Executors.newFixedThreadPool(4);
     private final Runnable beforeCheckout;
+    private volatile boolean documentRequested;
+    private volatile boolean documentSent;
+    private volatile boolean productsSent;
+    private volatile boolean cartSent;
+
+    String catalogProgress() {
+        return "documentRequested=" + documentRequested + "\ndocumentSent=" + documentSent
+            + "\nproductsSent=" + productsSent + "\ncartSent=" + cartSent;
+    }
     private final Map<String,Map<String,Integer>> carts = new HashMap<>();
 
     private record Product(String id, String name, int cents, int stock) {
@@ -64,16 +74,17 @@ public final class Shop implements AutoCloseable {
 
     Shop(java.time.Clock clock) throws IOException { this(clock, () -> {}); }
 
-    Shop(java.time.Clock clock, Runnable beforeCheckout) throws IOException {
+    Shop(java.time.Clock clock, Runnable beforeCheckout, Filter... filters) throws IOException {
         this.beforeCheckout = beforeCheckout;
         this.clock = clock;
         catalog.forEach(p -> remaining.put(p.id(), p.stock()));
         server = bindBrowserFixture();
         server.setExecutor(workers);
-        server.createContext("/", request -> {
+        var context = server.createContext("/", request -> {
             if (request.getRequestMethod().equals("POST") && request.getRequestURI().getPath().equals("/api/checkout")) beforeCheckout.run();
             handle(request);
         });
+        context.getFilters().addAll(java.util.List.of(filters));
         server.start();
     }
 
@@ -112,6 +123,8 @@ public final class Shop implements AutoCloseable {
     private synchronized void handle(HttpExchange request) throws IOException {
         try (request) {
             String path = request.getRequestURI().getPath();
+            boolean get = "GET".equals(request.getRequestMethod());
+            if (get && path.equals("/")) documentRequested = true;
             boolean add = path.startsWith("/api/cart/items/");
             boolean login = path.equals("/api/login"), logout = path.equals("/api/logout"), checkout = path.equals("/api/checkout");
             String method = add || login || logout || checkout ? "POST" : "GET";
@@ -332,6 +345,13 @@ public final class Shop implements AutoCloseable {
             request.getResponseHeaders().set("Cache-Control", "no-store");
             request.sendResponseHeaders(status, bytes.length);
             request.getResponseBody().write(bytes);
+            if (get && status == 200) {
+                switch (path) {
+                    case "/" -> documentSent = true;
+                    case "/api/products" -> productsSent = true;
+                    case "/api/cart" -> cartSent = true;
+                }
+            }
         }
     }
 }

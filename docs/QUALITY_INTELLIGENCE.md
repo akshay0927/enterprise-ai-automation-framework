@@ -2,7 +2,11 @@
 
 Open the **execution-comparison** artifact from the framework workflow and open `dashboard.html` in a browser. The dashboard runs offline. Its JSON siblings contain the comparison, per-platform findings, interpretations, labeled evaluation and bounded execution history. Each platform also uploads its independently generated `execution-summary.json`. The actual checkout SHA can be the GitHub pull-request merge revision.
 
-## Walk through an observed failure
+## What failed on Windows but passed on Ubuntu?
+
+In the first attempt of run 45988343732, both jobs checked out PR revision `255a1af`. `cartStartupFailureIsDiagnosed` and `shopperAddsNotebook` timed out on Windows before either isolated fixture received its document request. Ubuntu passed all ten tests on that same checkout. Start with the driver navigation and fixture request timing. The failure preceded the cart API call, and the logs leave the underlying driver cause open. These jobs predate the structured report schema. [Windows evidence](https://github.com/akshay0927/enterprise-ai-automation-framework/actions/runs/45988343732/job/140469554393) · [Ubuntu evidence](https://github.com/akshay0927/enterprise-ai-automation-framework/actions/runs/45988343732/job/140469554734)
+
+## Walk through missing execution evidence
 
 [Run 45994266355](https://github.com/akshay0927/enterprise-ai-automation-framework/actions/runs/45994266355) compared the same checkout on two platforms. Windows reported 16 passes. The Ubuntu Maven Wrapper could not fetch its distribution and produced no Surefire XML. The comparison marked 16 Ubuntu cases missing. Ubuntu has neither a measured pass rate nor a failed test assertion for that attempt. Start the investigation at the wrapper download step.
 

@@ -58,6 +58,8 @@ jobs:
           python scripts/test_comparison.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python scripts/test_triage.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/test_provider.py
         shell: pwsh
       - name: Generate execution summary
         if: always()
@@ -96,6 +98,10 @@ jobs:
         run: python scripts/compare_execution.py target/platforms "$(git rev-parse HEAD)"
       - name: Analyze observed failures offline
         run: python scripts/analyze_execution.py target/platforms
+      - name: Verify offline interpretation and evaluate synthetic cases
+        run: |
+          python scripts/interpret_execution.py target/comparison
+          python scripts/evaluate_triage.py
       - uses: actions/upload-artifact@v4
         with:
           name: execution-comparison

@@ -47,6 +47,18 @@ jobs:
           expected = "documentRequested=true\ndocumentSent=true\nproductsSent=true\ncartSent=false\npageState=error\nlocation=fixture\n"
           assert any(report.read_text(encoding='utf-8') == expected for report in reports), 'Missing cart failure diagnostic'
           PY
+      - name: Verify reporting regressions
+        if: always()
+        run: python scripts/test_execution_summary.py
+      - name: Generate execution summary
+        if: always()
+        run: python scripts/execution_summary.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: execution-summary-${{ runner.os }}
+          path: target/execution-summary.json
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:

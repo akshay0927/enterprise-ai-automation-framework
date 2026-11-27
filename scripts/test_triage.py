@@ -33,6 +33,16 @@ class TriageTest(unittest.TestCase):
         report["complete"] = False
         self.assertEqual(analyze(report)["executionFinding"]["category"], "incomplete_execution")
 
+    def test_toolchain_failure_requires_both_signals(self):
+        fixture = fixtures.ReportingTest("test_complete_and_distinct")
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        report = fixture.report()
+        report.update(complete=False, metrics=None, tests=[], toolchainCheck="failure")
+        self.assertEqual(analyze(report)["executionFinding"]["category"], "toolchain_failure")
+        report["toolchainCheck"] = "unknown"
+        self.assertEqual(analyze(report)["executionFinding"]["category"], "incomplete_execution")
+
     def test_rejects_raw_observations(self):
         with self.assertRaises(ValueError):
             classify({"result": "error", "category": "execution_error", "observations": [{"cookie": "SECRET"}]})

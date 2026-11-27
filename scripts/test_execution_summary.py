@@ -1,5 +1,8 @@
 import json
 import tempfile
+import os
+import subprocess
+from contextlib import chdir
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -60,6 +63,32 @@ class ReportingTest(unittest.TestCase):
         report = self.report()
         self.assertEqual(report["observedRetryMessages"], 0)
         self.assertEqual(report["scriptedRetryMessages"], 6)
+
+    def test_actual_checkout_provenance_even_when_reports_missing(self):
+        with chdir(self.directory), patch.dict(os.environ, {
+                "GITHUB_SHA": "0" * 40, "GITHUB_REPOSITORY": "example/fixture", "GITHUB_RUN_ID": "2",
+                "GITHUB_RUN_ATTEMPT": "1", "GITHUB_JOB": "smoke", "RUNNER_OS": "Linux"}):
+            subprocess.run(["git", "init", "--quiet"], check=True)
+            subprocess.run(["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                            "-c", "commit.gpgSign=false", "commit", "--allow-empty", "--quiet", "-m", "fixture"], check=True)
+            want = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+            self.assertEqual(es.main(), 1)
+            report = json.loads(Path("target/execution-summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["testedCommit"], want)
+            self.assertIsNone(report["metrics"])
+            self.assertFalse(report["complete"])
+
+    def test_typed_failure_signals(self):
+        for cls, expected in [("shop.DriverFactory$DriverVersionMismatch", "driver_mismatch"),
+                              ("shop.AuthenticatedShopTest$SignInFailure", "sign_in_failure")]:
+            case = self.suite.find("testcase")
+            detail = ET.SubElement(case, "error", type=cls)
+            self.suite.set("errors", "1")
+            report = self.report()
+            self.assertTrue(report["complete"])
+            row = next(r for r in report["tests"] if r["result"] == "error")
+            self.assertEqual(row["category"], expected)
+            case.remove(detail)
 
     def test_untrusted_xml(self):
         for source in ("<bad", "<!DOCTYPE a><testsuite/>", "<other/>", "<testsuite/>"):

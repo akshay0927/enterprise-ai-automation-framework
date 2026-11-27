@@ -26,7 +26,7 @@ def render(root):
     parts = ['<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">',
              '<title>Quality intelligence</title><style>body{font:16px/1.55 system-ui,sans-serif;color:#18282f;background:#fff;max-width:76rem;margin:auto;padding:2rem}h1,h2{line-height:1.2}h2{margin-top:2rem}table{display:block;overflow-x:auto;border-collapse:collapse}th,td{text-align:left;padding:.45rem .75rem;border-bottom:1px solid #ccd5d8}th{background:#eaf1f2}code{overflow-wrap:anywhere}</style><main>',
              '<h1>Quality intelligence</h1><p>Tested commit <code>' + html.escape(comparison["testedCommit"]) + '</code></p>']
-    platforms, failures, advice, slow = [], [], [], []
+    platforms, failures, advice, slow, gates = [], [], [], [], []
     for platform in ("Windows", "Linux"):
         report = read(root / "platforms" / ("execution-summary-" + platform) / "execution-summary.json")
         metrics = report["metrics"] or {}
@@ -34,6 +34,8 @@ def render(root):
         platforms.append([platform, "Complete" if report["complete"] else "Incomplete",
                           *[metrics.get(k, "—") for k in ("total", "passed", "failed", "error", "skipped", "suiteSeconds")],
                           rate, report["observedRetryMessages"] if report["observedRetryMessages"] is not None else "—"])
+        for name in ("guestCartIsIsolated", "shopperAddsNotebook"):
+            gates.append([platform, name, report["mandatorySmoke"].get(name, "Missing")])
         for row in report["tests"]:
             if row["result"] != "passed":
                 failures.append([platform, row["id"], row["result"]])
@@ -45,6 +47,7 @@ def render(root):
         for key, finding in items:
             advice.append([platform, key, finding["category"], finding["investigate"], finding["uncertainty"]])
     parts.extend(["<h2>Latest execution</h2>", table(["Platform","Evidence","Total","Passed","Failed","Errors","Skipped","Seconds","Pass rate","Browser retry messages"], platforms),
+                  "<h2>Mandatory smoke tests</h2>", table(["Platform","Test","Result"], gates),
                   "<h2>Cross-platform outcomes</h2>",table(["Outcome","Tests"],[(k,len(v)) for k,v in comparison["groups"].items()]),
                   "<h2>Failed and skipped tests</h2>",table(["Platform","Test","Outcome"], failures) if failures else "<p>No failed or skipped tests were reported.</p>",
                   "<h2>Longest test invocations</h2>",table(["Platform","Test","Seconds"], sorted(slow,key=lambda r:-r[2])[:8]),

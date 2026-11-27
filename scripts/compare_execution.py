@@ -101,6 +101,12 @@ def main():
     lines = ["Tested commit " + result["testedCommit"], "Complete: " + str(result["complete"])]
     for report in (windows, linux):
         lines.append(f'{report["platform"]}: {report["metrics"]}, browser retry messages {report["observedRetryMessages"]}, scripted retry messages {report["scriptedRetryMessages"]}')
+        versions = []
+        for key in ("javaVersion", "chromeVersion", "driverVersion"):
+            version = report.get(key)
+            require(version is None or re.fullmatch(r"[0-9.+_-]{1,32}", version), "invalid_version")
+            versions.append(key + "=" + (version or "unavailable"))
+        lines.append(" ".join(versions))
     lines.extend(f"{group}: {len(items)}" for group, items in result["groups"].items())
     (out / "summary.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))

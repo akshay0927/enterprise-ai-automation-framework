@@ -114,7 +114,8 @@ def summarize(directory):
               "driverVersion": None, "observedRetryMessages": None, "scriptedRetryMessages": None}
     try:
         paths = sorted(directory.glob("TEST-*.xml"))
-        require(len(paths) == 1 and paths[0].name == "TEST-TestSuite.xml", "missing_or_overlapping_suite")
+        require(paths, "missing_suite")
+        require(len(paths) == 1 and paths[0].name == "TEST-TestSuite.xml", "overlapping_or_unexpected_suite")
         suite = xml(paths[0], "testsuite")
         cases = suite.findall("testcase")
         require(0 < len(cases) <= 1000, "empty_or_oversized_suite")
@@ -146,8 +147,11 @@ def summarize(directory):
                 item = row(cls, name, result, duration)
                 if states and result in ("failed", "error"):
                     detail = case.find(states[0])
-                    if detail.get("type") in ("java.lang.AssertionError", "org.opentest4j.AssertionFailedError"):
-                        item["category"] = "assertion_failure"
+                    typed = {"java.lang.AssertionError": "assertion_failure",
+                             "org.opentest4j.AssertionFailedError": "assertion_failure",
+                             "shop.DriverFactory$DriverVersionMismatch": "driver_mismatch",
+                             "shop.AuthenticatedShopTest$SignInFailure": "sign_in_failure"}
+                    item["category"] = typed.get(detail.get("type"), item["category"])
                     prefix = "Suppressed: java.lang.IllegalStateException: documentRequested="
                     for line_no, line in enumerate((detail.text or "").splitlines()):
                         if line.strip().startswith(prefix):
@@ -200,6 +204,8 @@ def main():
                    job=os.environ["GITHUB_JOB"], platform=os.environ["RUNNER_OS"],
                    configuration={"browser": "chrome", "headless": True, "suite": "framework-smoke"},
                    generatedUtc=dt.datetime.now(dt.timezone.utc).isoformat())
+    bootstrap = os.environ.get("TOOLCHAIN_OUTCOME", "unknown")
+    summary["toolchainCheck"] = bootstrap if bootstrap in ("success", "failure", "skipped") else "unknown"
     path = Path("target/execution-summary.json")
     path.parent.mkdir(exist_ok=True)
     path.write_text(json.dumps(summary, indent=2, allow_nan=False) + "\n", encoding="utf-8")

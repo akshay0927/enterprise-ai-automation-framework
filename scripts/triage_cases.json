@@ -46,5 +46,17 @@
     "type": "test_failure",
     "observations": "received",
     "expected": "unknown"
+  },
+  {
+    "id": "typed-version-mismatch",
+    "type": "driver_mismatch",
+    "observations": "none",
+    "expected": "driver_mismatch"
+  },
+  {
+    "id": "typed-sign-in-failure",
+    "type": "sign_in_failure",
+    "observations": "none",
+    "expected": "sign_in_failure"
   }
 ]

@@ -23,6 +23,11 @@ jobs:
       - name: Install matched Chrome and ChromeDriver on Windows
         if: runner.os == 'Windows'
         run: python scripts/setup-chrome.py
+      - name: Verify Maven Wrapper toolchain
+        id: toolchain
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == Windows ]]; then ./mvnw.cmd --version; else sh mvnw --version; fi
       - if: runner.os == 'Linux'
         run: sh mvnw -B clean verify
       - if: runner.os == 'Windows'
@@ -65,6 +70,8 @@ jobs:
         shell: pwsh
       - name: Generate execution summary
         if: always()
+        env:
+          TOOLCHAIN_OUTCOME: ${{ steps.toolchain.outcome }}
         run: python scripts/execution_summary.py
       - uses: actions/upload-artifact@v4
         if: always()

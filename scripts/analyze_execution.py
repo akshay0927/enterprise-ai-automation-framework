@@ -10,6 +10,9 @@ GUIDANCE = {
     "blank_navigation": "Inspect the browser navigation and fixture request timing.",
     "catalog_initialization_error": "Check which catalog initialization response was last written.",
     "assertion_failure": "Compare the asserted contract with the observed fixture state.",
+    "driver_mismatch": "Inspect the browser and driver versions reported by the driver factory.",
+    "sign_in_failure": "Inspect the synthetic sign-in workflow and correlate its response status.",
+    "toolchain_failure": "Inspect the Maven Wrapper preflight and dependency availability.",
     "unknown": "Collect a test-linked diagnostic or a typed failure signal.",
     "incomplete_execution": "Inspect the original job outcome and evidence-generation step.",
 }
@@ -39,6 +42,8 @@ def classify(row):
             categories.add("catalog_initialization_error")
         else:
             categories.add("unknown")
+    if not markers and row["category"] in ("driver_mismatch", "sign_in_failure"):
+        return finding(row["category"], [row["category"]], ["cause"])
     if not markers and row["category"] == "assertion_failure":
         return finding("assertion_failure", ["typed_assertion"], ["cause"])
     if len(categories) == 1 and "unknown" not in categories:
@@ -49,9 +54,12 @@ def classify(row):
 def analyze(report):
     rows = index(report)
     findings = {key: classify(row) for key, row in rows.items() if row["result"] in ("failed", "error")}
+    incomplete = finding("incomplete_execution", ["incomplete_report"], ["complete_test_evidence"])
+    if report.get("toolchainCheck") == "failure" and report["metrics"] is None:
+        incomplete = finding("toolchain_failure", ["toolchain_failed", "incomplete_report"], ["cause"])
     return {"schemaVersion": 1, "mode": "deterministic_offline", "findings": findings,
             "executionFinding": None if report["complete"] else
-            finding("incomplete_execution", ["incomplete_report"], ["complete_test_evidence"])}
+            incomplete}
 
 
 def main():

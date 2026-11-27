@@ -6,6 +6,10 @@ import org.openqa.selenium.edge.*;
 import org.openqa.selenium.firefox.*;
 
 final class DriverFactory {
+    static final class DriverVersionMismatch extends IllegalStateException {
+        DriverVersionMismatch(String message) { super(message); }
+    }
+
     static WebDriver open(BrowserConfig config) {
         WebDriver driver = switch (config.browser()) {
             case CHROME -> {
@@ -35,7 +39,7 @@ final class DriverFactory {
                 String browserVersion = capabilities.getBrowserVersion();
                 String driverVersion = String.valueOf(metadata.get("chromedriverVersion")).split(" ")[0];
                 if (!browserVersion.split("\\.")[0].equals(driverVersion.split("\\.")[0]))
-                    throw new IllegalStateException("Incompatible Chrome " + browserVersion + " and driver " + driverVersion);
+                    throw new DriverVersionMismatch("Incompatible Chrome " + browserVersion + " and driver " + driverVersion);
                 System.out.println("Chrome " + browserVersion + ", ChromeDriver " + driverVersion);
             }
             driver.manage().timeouts().pageLoadTimeout(config.pageTimeout());

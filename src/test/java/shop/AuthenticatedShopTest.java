@@ -72,10 +72,17 @@ public class AuthenticatedShopTest {
         }
     }
 
+    static final class SignInFailure extends AssertionError {
+        SignInFailure() { super("The shop reported sign-in failure"); }
+    }
+
     private static void signIn(WebDriver driver, WebDriverWait wait, Shop shop) {
         driver.findElement(By.id("user")).sendKeys("alice");
         driver.findElement(By.id("password")).sendKeys(shop.fixturePassword("alice"));
         driver.findElement(By.cssSelector("#login button")).click();
-        wait.until(ExpectedConditions.textToBe(By.id("profile"), "alice"));
+        wait.until(browser -> {
+            if ("Sign-in failed".equals(browser.findElement(By.id("message")).getText())) throw new SignInFailure();
+            return "alice".equals(browser.findElement(By.id("profile")).getText());
+        });
     }
 }

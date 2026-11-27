@@ -52,7 +52,7 @@ def interpret(finding, provider=None, timeout=2):
     observations = []
     for ref, observation in zip(refs, finding["observations"]):
         if isinstance(observation, str):
-            require(observation in ("typed_assertion", "incomplete_report"), "invalid_signal")
+            require(observation in ("typed_assertion", "incomplete_report", "toolchain_failed", "driver_mismatch", "sign_in_failure"), "invalid_signal")
         else:
             require(observation.keys() == FIELDS.keys()
                     and all(v in FIELDS[k] for k, v in observation.items()), "invalid_marker")

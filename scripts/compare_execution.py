@@ -28,6 +28,13 @@ def index(report):
                 and math.isfinite(row["seconds"]) and row["seconds"] >= 0, "invalid_row")
         result[key] = row
     metrics = report["metrics"]
+    if metrics is not None:
+        require(set(metrics) == set(OUTCOMES) | {"total", "suiteSeconds"}, "invalid_metric_fields")
+        require(all(type(metrics[k]) is int and metrics[k] >= 0 for k in (*OUTCOMES, "total"))
+                and type(metrics["suiteSeconds"]) in (int, float) and math.isfinite(metrics["suiteSeconds"])
+                and metrics["suiteSeconds"] >= 0, "invalid_metrics")
+    retry = report["observedRetryMessages"]
+    require(retry is None or (type(retry) is int and retry >= 0), "invalid_retry_count")
     if metrics is None:
         require(not tests and not report["complete"], "missing_metrics")
     else:
@@ -93,7 +100,7 @@ def main():
     (out / "comparison.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     lines = ["Tested commit " + result["testedCommit"], "Complete: " + str(result["complete"])]
     for report in (windows, linux):
-        lines.append(f'{report["platform"]}: {report["metrics"]}, observed retry messages {report["observedRetryMessages"]}')
+        lines.append(f'{report["platform"]}: {report["metrics"]}, browser retry messages {report["observedRetryMessages"]}, scripted retry messages {report["scriptedRetryMessages"]}')
     lines.extend(f"{group}: {len(items)}" for group, items in result["groups"].items())
     (out / "summary.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))

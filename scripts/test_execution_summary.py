@@ -53,6 +53,14 @@ class ReportingTest(unittest.TestCase):
         self.assertNotIn("SECRET_CANARY", json.dumps(report))
         self.assertEqual(report["mandatorySmoke"]["guestCartIsIsolated"], "failed")
 
+    def test_scripted_retries_are_separate(self):
+        for case in self.suite.findall("testcase"):
+            if case.get("classname") == es.NAV:
+                ET.SubElement(case, "system-out").text = es.RETRY
+        report = self.report()
+        self.assertEqual(report["observedRetryMessages"], 0)
+        self.assertEqual(report["scriptedRetryMessages"], 6)
+
     def test_untrusted_xml(self):
         for source in ("<bad", "<!DOCTYPE a><testsuite/>", "<other/>", "<testsuite/>"):
             self.path.write_text(source, encoding="utf-8")

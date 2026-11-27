@@ -47,6 +47,11 @@ class ComparisonTest(unittest.TestCase):
             self.assertEqual(len(result["groups"][key]), 1)
         self.assertEqual(len(result["durationDifferences"]), 1)
 
+    def test_unexpected_metrics_are_rejected(self):
+        self.win["metrics"]["ignored"] = "SECRET_CANARY"
+        with self.assertRaises(ValueError):
+            compare(self.win, self.lin)
+
     def test_corruption(self):
         self.win["metrics"]["total"] += 1
         with self.assertRaises(ValueError):

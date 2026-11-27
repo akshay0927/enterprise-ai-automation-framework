@@ -111,7 +111,7 @@ def navigation(directory, expected):
 def summarize(directory):
     report = {"schemaVersion": 1, "complete": False, "issues": [], "tests": [], "metrics": None,
               "diagnostics": [], "mandatorySmoke": {}, "javaVersion": None, "chromeVersion": None,
-              "driverVersion": None, "observedRetryMessages": None}
+              "driverVersion": None, "observedRetryMessages": None, "scriptedRetryMessages": None}
     try:
         paths = sorted(directory.glob("TEST-*.xml"))
         require(len(paths) == 1 and paths[0].name == "TEST-TestSuite.xml", "missing_or_overlapping_suite")
@@ -119,7 +119,7 @@ def summarize(directory):
         cases = suite.findall("testcase")
         require(0 < len(cases) <= 1000, "empty_or_oversized_suite")
         rows, totals, nav = [], collections.Counter(), collections.Counter()
-        retries = 0
+        retries = scripted_retries = 0
         for case in cases:
             cls, name = case.get("classname", ""), case.get("name", "")
             methods = CLASSES.get(cls.removeprefix("shop."), [])
@@ -130,7 +130,10 @@ def summarize(directory):
             totals[result] += 1
             duration = seconds(case.get("time"))
             output = (case.findtext("system-out") or "").splitlines()
-            retries += output.count(RETRY)
+            if cls == NAV:
+                scripted_retries += output.count(RETRY)
+            else:
+                retries += output.count(RETRY)
             for line in output:
                 version = re.fullmatch(r"Chrome ([0-9.]{1,32}), ChromeDriver ([0-9.]{1,32})", line)
                 if version:
@@ -167,6 +170,7 @@ def summarize(directory):
         report["metrics"] = {**{k: totals[k] for k in OUTCOMES}, "total": len(rows),
                              "suiteSeconds": seconds(suite.get("time"))}
         report["observedRetryMessages"] = retries
+        report["scriptedRetryMessages"] = scripted_retries
         for prop in suite.findall("properties/property"):
             if prop.get("name") == "java.version" and re.fullmatch(r"[0-9.+_-]{1,32}", prop.get("value", "")):
                 report["javaVersion"] = prop.get("value")

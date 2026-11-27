@@ -60,6 +60,8 @@ jobs:
           python scripts/test_triage.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python scripts/test_provider.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/test_history.py
         shell: pwsh
       - name: Generate execution summary
         if: always()
@@ -86,6 +88,9 @@ jobs:
   compare:
     if: ${{ always() && !cancelled() }}
     needs: smoke
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -102,6 +107,12 @@ jobs:
         run: |
           python scripts/interpret_execution.py target/comparison
           python scripts/evaluate_triage.py
+      - name: Sample previous reports and render dashboard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/execution_history.py
+          python scripts/quality_dashboard.py
       - uses: actions/upload-artifact@v4
         with:
           name: execution-comparison

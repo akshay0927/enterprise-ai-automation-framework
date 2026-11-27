@@ -102,6 +102,8 @@ def navigation(directory, expected):
             status = test.get("status")
             require(status in ("PASS", "FAIL", "SKIP"), "invalid_outcome")
             outcome = {"PASS": "passed", "SKIP": "skipped", "FAIL": "failed"}[status]
+            if status == "FAIL" and expected["error"] and not expected["failed"]:
+                outcome = "error"
             rows.append(row(NAV, METHOD, outcome, seconds(test.get("duration-ms")) / 1000, SCENARIOS[key]))
     # TestNG combines assertion failures and execution errors. Never guess a join.
     require(collections.Counter(r["result"] for r in rows) == expected, "ambiguous_invocations")

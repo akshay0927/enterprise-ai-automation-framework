@@ -28,7 +28,7 @@ class HistoryTest(unittest.TestCase):
             history([self.first, self.first])
 
     def test_missing_data_and_html(self):
-        item = dict(self.first, complete=False, tests=[], metrics=None)
+        item = dict(self.first, complete=False, tests=[], metrics=None, mandatorySmoke={})
         self.assertIsNone(history([item])["executions"][0]["metrics"])
         self.assertNotIn("<script>", table(["Test"], [["<script>"]]))
 

@@ -125,3 +125,13 @@ jobs:
           name: execution-comparison
           path: target/comparison/
           if-no-files-found: error
+      - uses: actions/download-artifact@v4
+        with:
+          name: execution-comparison
+          path: target/published-quality
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: smoke-reports-*
+          path: target/raw-evidence
+      - name: Verify published dashboard and replay uploaded test evidence
+        run: python scripts/verify_quality_artifacts.py "$(git rev-parse HEAD)"

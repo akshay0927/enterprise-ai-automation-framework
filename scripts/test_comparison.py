@@ -40,6 +40,7 @@ class ComparisonTest(unittest.TestCase):
             for key in OUTCOMES:
                 report["metrics"][key] = sum(r["result"] == key for r in report["tests"])
             report["metrics"]["total"] = len(report["tests"])
+            report["mandatorySmoke"] = {r["method"]: r["result"] for r in report["tests"] if r["mandatorySmoke"]}
         self.win["tests"][0]["seconds"] = 5
         result = compare(self.win, self.lin)
         self.assertFalse(result["complete"])

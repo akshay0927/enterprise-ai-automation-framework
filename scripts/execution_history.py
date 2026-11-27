@@ -61,7 +61,7 @@ def history(reports):
     revisions = defaultdict(lambda: defaultdict(list))
     executions = []
     test_history = defaultdict(list)
-    for report in reports:
+    for report in sorted(reports, key=lambda r: (int(r["workflowRun"]), int(r["attempt"]), r["platform"])):
         if report["schemaVersion"] != 1 or "configuration" not in report:
             continue  # Predates the comparable execution configuration contract.
         require(report["repository"] == "akshay0927/enterprise-ai-automation-framework"
@@ -89,7 +89,11 @@ def history(reports):
         for key, values in sorted(tests.items()):
             if "passed" in values and any(v in ("failed", "error") for v in values):
                 signals.append({"testedCommit": sha, "platform": platform, "test": key,
-                                "sampleSize": len(values), "label": "mixed_outcomes_same_revision"})
+                                "sampleSize": len(values), "label": "mixed_outcomes_same_revision",
+                                "passToFailure": sum(a == "passed" and b in ("failed", "error")
+                                                     for a, b in zip(values, values[1:])),
+                                "failureToPass": sum(a in ("failed", "error") and b == "passed"
+                                                     for a, b in zip(values, values[1:]))})
     return {"schemaVersion": 1, "sampleSize": len(executions), "executions": executions,
             "mixedOutcomes": signals, "testHistory": dict(test_history)}
 

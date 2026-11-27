@@ -26,6 +26,11 @@ def index(report):
         require(key in known and key not in result, "invalid_identity")
         require(row["result"] in OUTCOMES and type(row["seconds"]) in (int, float)
                 and math.isfinite(row["seconds"]) and row["seconds"] >= 0, "invalid_row")
+        require(row["category"] in (None, "test_failure", "execution_error", "assertion_failure",
+                                    "sign_in_failure", "driver_mismatch"), "invalid_failure_category")
+        require(type(row["mandatorySmoke"]) is bool
+                and row["mandatorySmoke"] == key.startswith("shop.SmokeTest."), "invalid_gate")
+        require(row["class"] + "." + row["method"] == key.split("#")[0], "invalid_identity")
         result[key] = row
     metrics = report["metrics"]
     if metrics is not None:
@@ -35,6 +40,10 @@ def index(report):
                 and metrics["suiteSeconds"] >= 0, "invalid_metrics")
     retry = report["observedRetryMessages"]
     require(retry is None or (type(retry) is int and retry >= 0), "invalid_retry_count")
+    scripted = report.get("scriptedRetryMessages")
+    require(scripted is None or (type(scripted) is int and scripted >= 0), "invalid_retry_count")
+    gates = {row["method"]: row["result"] for row in tests if row["mandatorySmoke"]}
+    require(gates == report["mandatorySmoke"], "inconsistent_gates")
     if metrics is None:
         require(not tests and not report["complete"], "missing_metrics")
     else:

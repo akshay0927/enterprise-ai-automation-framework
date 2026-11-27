@@ -38,7 +38,7 @@ class TriageTest(unittest.TestCase):
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)
         report = fixture.report()
-        report.update(complete=False, metrics=None, tests=[], toolchainCheck="failure")
+        report.update(complete=False, metrics=None, tests=[], mandatorySmoke={}, toolchainCheck="failure")
         self.assertEqual(analyze(report)["executionFinding"]["category"], "toolchain_failure")
         report["toolchainCheck"] = "unknown"
         self.assertEqual(analyze(report)["executionFinding"]["category"], "incomplete_execution")

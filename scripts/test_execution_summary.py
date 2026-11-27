@@ -132,6 +132,20 @@ class ReportingTest(unittest.TestCase):
         with patch.object(es, "LIMIT", 10):
             self.assertIn("input_limit", es.summarize(self.directory)["issues"])
 
+    def test_parameterized_error_and_ambiguous_mixture(self):
+        cases = [c for c in self.suite.findall("testcase") if c.get("classname") == es.NAV]
+        methods = self.testng.findall(".//test-method")
+        ET.SubElement(cases[0], "error")
+        self.suite.set("errors", "1")
+        methods[0].set("status", "FAIL")
+        report = self.report()
+        self.assertTrue(report["complete"])
+        self.assertEqual(report["metrics"]["error"], 1)
+        ET.SubElement(cases[1], "failure")
+        self.suite.set("failures", "1")
+        methods[1].set("status", "FAIL")
+        self.assertIn("ambiguous_invocations", self.report()["issues"])
+
     def test_unmapped_parameter_is_incomplete(self):
         self.testng.find(".//value").text = "SECRET_CANARY"
         report = self.report()

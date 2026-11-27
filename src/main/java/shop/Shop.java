@@ -232,6 +232,7 @@ public final class Shop implements AutoCloseable {
                     <fieldset id="controls" disabled><legend>Shopping</legend>
                     <label>Search <input id="search"></label><p id="product"></p>
                     <button id="add" disabled>Add notebook</button><output id="quantity"></output>
+                    <section aria-label="Cart"><ul id="lines"></ul><span id="empty">Cart is empty</span> Total: <output id="total"></output></section>
                     <form id="login"><label>User <input id="user" required></label>
                     <label>Password <input id="password" type="password" required></label><button>Sign in</button></form>
                     <output id="profile">Guest</output><button id="logout" hidden>Sign out</button>
@@ -239,6 +240,7 @@ public final class Shop implements AutoCloseable {
                     <script type="module">
                     const el = id => document.getElementById(id);
                     let token = null;
+                    let products = [];
                     async function api(path, options = {}, bearer = token) {
                       const response = await fetch(path, {
                         ...options,
@@ -248,8 +250,9 @@ public final class Shop implements AutoCloseable {
                       if (!response.ok) throw response;
                       return response.json();
                     }
-                    async function refreshCart() {
-                      el('quantity').textContent = (await api('/api/cart')).quantity;
+                    function renderCart(cart) {
+                      const money = cents => ' {
+                      renderCart(await api('/api/cart'));
                     }
                     function signedIn(user) {
                       el('profile').textContent = user || 'Guest';
@@ -259,6 +262,7 @@ public final class Shop implements AutoCloseable {
                     function clearSession() {
                       token = null;
                       signedIn(null);
+                      renderCart({quantity:0, items:[], totalCents:0});
                       el('user').value = el('password').value = '';
                       el('quantity').textContent = el('message').textContent = '';
                     }
@@ -294,14 +298,14 @@ public final class Shop implements AutoCloseable {
                         const profile = await api('/api/profile', {}, session.token);
                         const cart = await api('/api/cart', {}, session.token);
                         token = session.token;
-                        el('quantity').textContent = cart.quantity;
+                        renderCart(cart);
                         signedIn(profile.user);
                         el('message').textContent = '';
                       }, 'Sign-in failed');
                     };
                     el('checkout').onclick = () => act(async () => {
                       const order = await api('/api/checkout', {method:'POST'});
-                      el('quantity').textContent = 0;
+                      renderCart({quantity:0, items:[], totalCents:0});
                       el('message').textContent = 'Order confirmed: ' + order.id;
                     }, 'Checkout unavailable');
                     el('logout').onclick = () => act(async () => {
@@ -314,7 +318,7 @@ public final class Shop implements AutoCloseable {
                       }
                     }, 'Could not complete sign-out');
                     try {
-                    const products = await api('/api/products');
+                    products = await api('/api/products');
                     await refreshCart();
                     function filter() {
                       const match = products.find(p => p.name.toLowerCase().includes(el('search').value.trim().toLowerCase()));
@@ -326,7 +330,138 @@ public final class Shop implements AutoCloseable {
                     el('search').oninput = filter;
                     el('add').onclick = () => act(async () => {
                       const cart = await api('/api/cart/items/' + el('add').dataset.product, {method:'POST'});
+                      renderCart(cart);
+                      el('message').textContent = '';
+                    }, 'Cart update rejected');
+                    filter();
+                    el('controls').disabled = false;
+                    document.documentElement.dataset.state = 'ready';
+                    } catch (failure) {
+                      document.documentElement.dataset.state = 'error';
+                      el('message').textContent = 'Shop initialization failed';
+                    }
+                    </script></html>
+                    """;
+            } else {
+                status = 404;
+                body = "{}";
+            }
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            request.getResponseHeaders().set("Content-Type", type + "; charset=utf-8");
+            request.getResponseHeaders().set("Cache-Control", "no-store");
+            request.sendResponseHeaders(status, bytes.length);
+            request.getResponseBody().write(bytes);
+            if (get && status == 200) {
+                switch (path) {
+                    case "/" -> documentSent = true;
+                    case "/api/products" -> productsSent = true;
+                    case "/api/cart" -> cartSent = true;
+                }
+            }
+        }
+    }
+} + (cents / 100).toFixed(2);
                       el('quantity').textContent = cart.quantity;
+                      el('total').textContent = money(cart.totalCents);
+                      el('empty').hidden = cart.items.length > 0;
+                      el('lines').replaceChildren();
+                      for (const item of cart.items) {
+                        const product = products.find(p => p.id === item.productId);
+                        const row = document.createElement('li');
+                        row.dataset.item = product.id;
+                        const summary = document.createElement('span');
+                        summary.textContent = product.name + ' × ' + item.quantity + ' @ ' + money(product.unitPriceCents)
+                          + ' = ' + money(item.quantity * product.unitPriceCents);
+                        const remove = document.createElement('button');
+                        remove.textContent = 'Remove ' + product.name;
+                        remove.onclick = () => act(async () => {
+                          renderCart(await api('/api/cart/items/' + product.id, {method:'DELETE'}));
+                          el('message').textContent = '';
+                        }, 'Cart update rejected');
+                        row.append(summary, remove);
+                        el('lines').append(row);
+                      }
+                    }
+                    async function refreshCart() {
+                      renderCart(await api('/api/cart'));
+                    }
+                    function signedIn(user) {
+                      el('profile').textContent = user || 'Guest';
+                      el('login').hidden = !!user;
+                      el('checkout').hidden = el('logout').hidden = !user;
+                    }
+                    function clearSession() {
+                      token = null;
+                      signedIn(null);
+                      renderCart({quantity:0, items:[], totalCents:0});
+                      el('user').value = el('password').value = '';
+                      el('quantity').textContent = el('message').textContent = '';
+                    }
+                    async function act(operation, failureMessage) {
+                      const controls = el('controls');
+                      if (controls.disabled) return;
+                      controls.disabled = true;
+                      try {
+                        await operation();
+                      } catch (failure) {
+                        if (token && failure instanceof Response && failure.status === 401) {
+                          clearSession();
+                          el('message').textContent = 'Session expired. Sign in again.';
+                          try {
+                            await refreshCart();
+                          } catch {
+                            el('message').textContent += ' Guest cart unavailable.';
+                          }
+                        } else {
+                          el('message').textContent = failureMessage;
+                        }
+                      } finally {
+                        controls.disabled = false;
+                      }
+                    }
+                    el('login').onsubmit = event => {
+                      event.preventDefault();
+                      return act(async () => {
+                        const credentials = el('user').value + ':' + el('password').value;
+                        el('password').value = '';
+                        const session = await api('/api/login', {method:'POST', body:credentials});
+                        el('quantity').textContent = '';
+                        const profile = await api('/api/profile', {}, session.token);
+                        const cart = await api('/api/cart', {}, session.token);
+                        token = session.token;
+                        renderCart(cart);
+                        signedIn(profile.user);
+                        el('message').textContent = '';
+                      }, 'Sign-in failed');
+                    };
+                    el('checkout').onclick = () => act(async () => {
+                      const order = await api('/api/checkout', {method:'POST'});
+                      renderCart({quantity:0, items:[], totalCents:0});
+                      el('message').textContent = 'Order confirmed: ' + order.id;
+                    }, 'Checkout unavailable');
+                    el('logout').onclick = () => act(async () => {
+                      await api('/api/logout', {method:'POST'});
+                      clearSession();
+                      try {
+                        await refreshCart();
+                      } catch {
+                        el('message').textContent = 'Signed out. Guest cart unavailable.';
+                      }
+                    }, 'Could not complete sign-out');
+                    try {
+                    products = await api('/api/products');
+                    await refreshCart();
+                    function filter() {
+                      const match = products.find(p => p.name.toLowerCase().includes(el('search').value.trim().toLowerCase()));
+                      el('product').textContent = match?.name ?? 'No matching products';
+                      el('add').disabled = !match || match.stock === 0;
+                      el('add').dataset.product = match?.id ?? '';
+                      el('add').textContent = match ? 'Add ' + match.name : 'Add product';
+                    }
+                    el('search').oninput = filter;
+                    el('add').onclick = () => act(async () => {
+                      const cart = await api('/api/cart/items/' + el('add').dataset.product, {method:'POST'});
+                      renderCart(cart);
                       el('message').textContent = '';
                     }, 'Cart update rejected');
                     filter();

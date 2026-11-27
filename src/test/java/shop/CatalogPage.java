@@ -80,4 +80,18 @@ final class CatalogPage {
         wait.until(ExpectedConditions.textToBe(By.id("quantity"), Integer.toString(expected)));
         return Integer.parseInt(driver.findElement(By.id("quantity")).getText());
     }
+    void removeItem(String id) {
+        wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("[data-item='" + id + "'] button"))).click();
+    }
+
+    java.util.List<String> cartLines() {
+        return driver.findElements(By.cssSelector("#lines li span")).stream().map(e -> e.getText()).toList();
+    }
+
+    String cartTotal() { return driver.findElement(By.id("total")).getText(); }
+
+    boolean emptyCartVisible() {
+        var message = driver.findElement(By.id("empty"));
+        return message.isDisplayed() && message.getText().equals("Cart is empty");
+    }
 }

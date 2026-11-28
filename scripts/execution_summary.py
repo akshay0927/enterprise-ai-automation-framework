@@ -10,7 +10,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 CLASSES = {
-    "SmokeTest": ["guestCartIsIsolated", "shopperAddsNotebook"],
+    "SmokeTest": ["guestCartIsIsolated", "shopperAddsNotebook", "shopperUpdatesMultiItemCart"],
     "AuthenticatedShopTest": ["expiredCheckoutReturnsToGuest", "browserCheckoutAndLogout"],
     "CatalogDiagnosticsTest": ["cartStartupFailureIsDiagnosed"],
     "CheckoutRaceTest": ["concurrentCheckouts"],

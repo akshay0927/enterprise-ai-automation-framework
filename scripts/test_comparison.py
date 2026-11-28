@@ -21,7 +21,7 @@ class ComparisonTest(unittest.TestCase):
     def test_equal(self):
         result = compare(self.win, self.lin)
         self.assertTrue(result["complete"])
-        self.assertEqual(len(result["groups"]["bothPassed"]), 16)
+        self.assertEqual(len(result["groups"]["bothPassed"]), len(self.win["tests"]))
 
     def test_incompatible(self):
         for key, value in [("testedCommit", "b"*40), ("attempt", "2"), ("workflowRun", "456"),

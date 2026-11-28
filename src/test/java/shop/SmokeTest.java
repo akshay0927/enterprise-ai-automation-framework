@@ -62,6 +62,8 @@ public class SmokeTest {
                 assertCart(page, 1, 1);
                 page.addProduct();
                 assertCart(page, 1, 2);
+                page.refresh();
+                assertCart(page, 1, 2);
                 page.removeItem("notebook");
                 assertCart(page, 0, 2);
                 page.removeItem("pen");

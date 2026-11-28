@@ -29,7 +29,8 @@ class ReportingTest(unittest.TestCase):
                         fields = ET.SubElement(test, "params")
                         for i, value in enumerate(params):
                             ET.SubElement(ET.SubElement(fields, "param", index=str(i)), "value").text = value
-        self.suite.set("tests", "16")
+        self.expected = sum(len(methods) for methods in es.CLASSES.values()) - 1 + len(es.SCENARIOS)
+        self.suite.set("tests", str(self.expected))
 
     def report(self):
         ET.ElementTree(self.suite).write(self.path, encoding="utf-8")
@@ -39,8 +40,8 @@ class ReportingTest(unittest.TestCase):
     def test_complete_and_distinct(self):
         report = self.report()
         self.assertTrue(report["complete"])
-        self.assertEqual(report["metrics"]["passed"], 16)
-        self.assertEqual(len({r["id"] for r in report["tests"]}), 16)
+        self.assertEqual(report["metrics"]["passed"], self.expected)
+        self.assertEqual(len({r["id"] for r in report["tests"]}), self.expected)
         self.assertEqual(report["diagnostics"], [])
         self.assertEqual(set(report["mandatorySmoke"].values()), {"passed"})
 
@@ -52,7 +53,7 @@ class ReportingTest(unittest.TestCase):
             self.suite.set(count, "1")
         report = self.report()
         self.assertTrue(report["complete"])
-        self.assertEqual([report["metrics"][k] for k in es.OUTCOMES], [13, 1, 1, 1])
+        self.assertEqual([report["metrics"][k] for k in es.OUTCOMES], [self.expected - 3, 1, 1, 1])
         self.assertNotIn("SECRET_CANARY", json.dumps(report))
         self.assertEqual(report["mandatorySmoke"]["guestCartIsIsolated"], "failed")
 
@@ -102,7 +103,7 @@ class ReportingTest(unittest.TestCase):
     def test_duplicate_or_incomplete(self):
         self.suite.set("tests", "88")
         self.assertIn("inconsistent_totals", self.report()["issues"])
-        self.suite.set("tests", "15")
+        self.suite.set("tests", str(self.expected - 1))
         self.suite.remove(self.suite.find("testcase"))
         self.assertIn("incomplete_test_inventory", self.report()["issues"])
         self.suite.append(self.suite.find("testcase"))
@@ -120,7 +121,7 @@ class ReportingTest(unittest.TestCase):
         path.write_text("documentRequested=SECRET_CANARY")
         report = self.report()
         self.assertFalse(report["complete"])
-        self.assertEqual(report["metrics"]["passed"], 16)
+        self.assertEqual(report["metrics"]["passed"], self.expected)
         self.assertNotIn("SECRET_CANARY", json.dumps(report))
 
     def test_overlapping_files_and_limits(self):

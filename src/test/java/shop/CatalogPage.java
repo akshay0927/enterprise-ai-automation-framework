@@ -80,6 +80,15 @@ final class CatalogPage {
         wait.until(ExpectedConditions.textToBe(By.id("quantity"), Integer.toString(expected)));
         return Integer.parseInt(driver.findElement(By.id("quantity")).getText());
     }
+    void refresh() {
+        driver.navigate().refresh();
+        wait.withMessage("Shop did not become ready after refresh").until(browser -> {
+            String state = browser.findElement(By.tagName("html")).getDomAttribute("data-state");
+            if ("error".equals(state)) throw new IllegalStateException("Shop reported initialization failure after refresh");
+            return "ready".equals(state);
+        });
+    }
+
     void removeItem(String id) {
         wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("[data-item='" + id + "'] button"))).click();
     }

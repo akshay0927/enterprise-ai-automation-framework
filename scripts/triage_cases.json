@@ -1,0 +1,62 @@
+[
+  {
+    "id": "blank-browser",
+    "type": "test_failure",
+    "observations": "blank",
+    "expected": "blank_navigation"
+  },
+  {
+    "id": "cart-503",
+    "type": "execution_error",
+    "observations": "cart",
+    "expected": "catalog_initialization_error"
+  },
+  {
+    "id": "assertion",
+    "type": "assertion_failure",
+    "observations": "none",
+    "expected": "assertion_failure"
+  },
+  {
+    "id": "expired-session-without-signal",
+    "type": "test_failure",
+    "observations": "none",
+    "expected": "unknown"
+  },
+  {
+    "id": "driver-mismatch-without-versions",
+    "type": "execution_error",
+    "observations": "none",
+    "expected": "unknown"
+  },
+  {
+    "id": "infrastructure-without-signal",
+    "type": "execution_error",
+    "observations": "none",
+    "expected": "unknown"
+  },
+  {
+    "id": "contradictory",
+    "type": "test_failure",
+    "observations": "mixed",
+    "expected": "unknown"
+  },
+  {
+    "id": "document-seen-but-blank",
+    "type": "test_failure",
+    "observations": "received",
+    "expected": "unknown"
+  },
+  {
+    "id": "typed-version-mismatch",
+    "type": "driver_mismatch",
+    "observations": "none",
+    "expected": "driver_mismatch"
+  },
+  {
+    "id": "typed-sign-in-failure",
+    "type": "sign_in_failure",
+    "observations": "none",
+    "expected": "sign_in_failure"
+  }
+]

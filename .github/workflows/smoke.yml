@@ -1,0 +1,145 @@
+name: Framework smoke tests
+on: [pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      SHOP_BROWSER: chrome
+      SHOP_HEADLESS: "true"
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Install matched Chrome and ChromeDriver on Windows
+        if: runner.os == 'Windows'
+        run: python scripts/setup-chrome.py
+      - name: Verify Maven Wrapper toolchain
+        id: toolchain
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == Windows ]]; then ./mvnw.cmd --version; else sh mvnw --version; fi
+      - if: runner.os == 'Linux'
+        run: sh mvnw -B clean verify
+      - if: runner.os == 'Windows'
+        run: .\mvnw.cmd -B clean verify
+      - name: Verify standalone launcher from a path with spaces
+        if: runner.os == 'Windows'
+        run: |
+          python scripts/test-windows-launcher.py start-shop.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/test-windows-launcher.py start-shop.cmd
+      - name: Check required tests
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          tests = [case for report in Path('target/surefire-reports').glob('TEST-*.xml') for case in ET.parse(report).findall('testcase')]
+          passed = {t.get('name') for t in tests if all(t.find(k) is None for k in ('skipped','failure','error'))}
+          assert {'guestCartIsIsolated','shopperAddsNotebook','shopperUpdatesMultiItemCart','browserCheckoutAndLogout','expiredCheckoutReturnsToGuest','cartStartupFailureIsDiagnosed','concurrentCheckouts','isolatedOrdersAndStock','inventoryLimitsPreserveCart','configurationPrecedence','rejectsInvalidConfiguration'} <= passed, passed
+          navigation = [case for case in tests if case.get('classname') == 'shop.CatalogNavigationTest']
+          assert len(navigation) == 6 and all(
+              all(case.find(tag) is None for tag in ('skipped', 'failure', 'error')) for case in navigation
+          ), 'Expected six passing navigation scenarios'
+          reports = Path('target/surefire-reports/browser-diagnostics').glob('catalog-open-*.txt')
+          expected = "documentRequested=true\ndocumentSent=true\nproductsSent=true\ncartSent=false\npageState=error\nlocation=fixture\n"
+          assert any(report.read_text(encoding='utf-8') == expected for report in reports), 'Missing cart failure diagnostic'
+          PY
+      - name: Verify reporting regressions
+        if: always()
+        run: |
+          python scripts/test_execution_summary.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/test_comparison.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/test_triage.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/test_provider.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/test_history.py
+        shell: pwsh
+      - name: Generate execution summary
+        if: always()
+        env:
+          TOOLCHAIN_OUTCOME: ${{ steps.toolchain.outcome }}
+        run: python scripts/execution_summary.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: execution-summary-${{ runner.os }}
+          path: target/execution-summary.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-reports-${{ runner.os }}
+          path: target/surefire-reports/
+
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Linux'
+        with:
+          name: shop-browser-preview
+          path: target/browser-preview/shop.png
+          if-no-files-found: error
+
+  compare:
+    if: ${{ always() && !cancelled() }}
+    needs: smoke
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: execution-summary-*
+          path: target/platforms
+      - name: Inspect platform artifacts and compare the tested checkout
+        run: python scripts/compare_execution.py target/platforms "$(git rev-parse HEAD)"
+      - name: Analyze observed failures offline
+        run: python scripts/analyze_execution.py target/platforms
+      - name: Verify offline interpretation and evaluate synthetic cases
+        run: |
+          python scripts/interpret_execution.py target/comparison
+          python scripts/evaluate_triage.py
+      - name: Sample previous reports and render dashboard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/execution_history.py
+          python scripts/quality_dashboard.py
+      - uses: actions/upload-artifact@v4
+        id: bundle
+        with:
+          name: execution-comparison-attempt-${{ github.run_attempt }}
+          path: target/comparison/
+          if-no-files-found: error
+      - name: Read back the exact uploaded bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE_ID: ${{ steps.bundle.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          for delay in 0 2 5; do
+            sleep "$delay"
+            if gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$BUNDLE_ID/zip" > target/published.zip; then break; fi
+          done
+          python scripts/read_quality_bundle.py
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: smoke-reports-*
+          path: target/raw-evidence
+      - name: Verify published dashboard and replay uploaded test evidence
+        run: python scripts/verify_quality_artifacts.py "$(git rev-parse HEAD)"

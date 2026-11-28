@@ -27,6 +27,18 @@ class HistoryTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             history([self.first, self.first])
 
+    def test_legacy_inventory_is_retained_without_trend_claims(self):
+        legacy = copy.deepcopy(self.first)
+        removed = next(row for row in legacy["tests"] if row["id"].endswith(".shopperUpdatesMultiItemCart"))
+        legacy["tests"].remove(removed)
+        legacy["metrics"]["total"] -= 1
+        legacy["metrics"]["passed"] -= 1
+        legacy["mandatorySmoke"].pop("shopperUpdatesMultiItemCart")
+        result = history([legacy])
+        self.assertFalse(result["executions"][0]["inventoryCompatible"])
+        self.assertIn("shop.SmokeTest.guestCartIsIsolated", result["testHistory"])
+        self.assertEqual(result["mixedOutcomes"], [])
+
     def test_missing_data_and_html(self):
         item = dict(self.first, complete=False, tests=[], metrics=None, mandatorySmoke={})
         self.assertIsNone(history([item])["executions"][0]["metrics"])

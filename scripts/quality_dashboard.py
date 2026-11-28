@@ -53,7 +53,8 @@ def render(root):
                   "<h2>Longest test invocations</h2>",table(["Platform","Test","Seconds"], sorted(slow,key=lambda r:-r[2])[:8]),
                   "<h2>Execution history</h2>",f'<p>{history["sampleSize"]} platform executions sampled. {len(history["mixedOutcomes"])} tests showed mixed outcomes on the same platform and revision.</p>',
                   table(["Run","Attempt","Platform","Commit","Evidence","Passed","Failed","Errors"],[
-                      [e["workflowRun"],e["attempt"],e["platform"],e["testedCommit"][:12],"Complete" if e["complete"] else "Incomplete",
+                      [e["workflowRun"],e["attempt"],e["platform"],e["testedCommit"][:12],("Inventory changed" if not e.get("inventoryCompatible", True)
+                        else "Complete" if e["complete"] else "Incomplete"),
                        *[(e["metrics"] or {}).get(k,"—") for k in ("passed","failed","error")]] for e in history["executions"]]),
                   "<h2>Investigation guidance</h2>",table(["Platform","Test","Category","Investigation","Uncertainty"],advice) if advice else "<p>No current failure findings.</p>",
                   "<h2>Offline evaluation</h2>",

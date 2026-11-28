@@ -8,7 +8,7 @@ import sys
 import zipfile
 
 from compare_execution import index
-from execution_summary import bounded, require
+from execution_summary import EvidenceError, bounded, require
 
 
 def collect_previous(destination, repo, branch, run_id):
@@ -69,7 +69,15 @@ def history(reports):
                 and report["platform"] in ("Linux", "Windows")
                 and all(re.fullmatch("[0-9]+", report[k]) for k in ("workflowRun", "attempt"))
                 and report["job"] == "smoke", "invalid_history_identity")
-        rows = index(report)
+        compatible_inventory = True
+        try:
+            rows = index(report)
+        except EvidenceError as failure:
+            if str(failure) != "incomplete_inventory":
+                raise
+            legacy = dict(report, complete=False)
+            rows = index(legacy)
+            compatible_inventory = False
         scope = (report["repository"], report["testedCommit"], report["platform"],
                  json.dumps(report["configuration"], sort_keys=True))
         run_key = scope + (report["workflowRun"], report["attempt"], report["job"])
@@ -77,11 +85,12 @@ def history(reports):
         seen.add(run_key)
         executions.append({k: report[k] for k in ("testedCommit", "platform", "workflowRun", "attempt", "complete", "metrics")})
         executions[-1]["browserRetryMessages"] = report.get("observedRetryMessages") if "scriptedRetryMessages" in report else None
+        executions[-1]["inventoryCompatible"] = compatible_inventory
         for key, row in rows.items():
             test_history[key].append({"run": report["workflowRun"], "attempt": report["attempt"],
                                       "platform": report["platform"], "result": row["result"],
                                       "seconds": row["seconds"], "category": row["category"]})
-        if report["complete"]:
+        if report["complete"] and compatible_inventory:
             for key, row in rows.items():
                 revisions[scope][key].append(row["result"])
     signals = []
